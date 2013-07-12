@@ -1,0 +1,19 @@
+{
+  "name": "highcharts",
+  "version": "2.2.5-bower",
+  "main": "js/highcharts.src.js",
+  "ignore": [
+    "**/.*",
+    "ant",
+    "build.*",
+    "exporting-server",
+    "fiddles",
+    "lib",
+    "samples",
+    "studies",
+    "test",
+    "tools",
+    "node_modules",
+    "components"
+  ]
+}
