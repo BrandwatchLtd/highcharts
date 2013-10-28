@@ -1,6 +1,9 @@
 $(function () {
     var chart;
-    $(document).ready(function() {
+    
+    $(document).ready(function () {
+    	
+    	// Build the chart
         chart = new Highcharts.Chart({
             chart: {
                 renderTo: 'container',
@@ -12,9 +15,8 @@ $(function () {
                 text: 'Browser market shares at a specific website, 2010'
             },
             tooltip: {
-                formatter: function() {
-                    return '<b>'+ this.point.name +'</b>: '+ this.percentage +' %';
-                }
+        	    pointFormat: '{series.name}: <b>{point.percentage}%</b>',
+            	percentageDecimals: 1
             },
             plotOptions: {
                 pie: {

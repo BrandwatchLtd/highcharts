@@ -259,6 +259,23 @@ function pad(number, length) {
 }
 
 /**
+ * Wrap a method with extended functionality, preserving the original function
+ * @param {Object} obj The context object that the method belongs to 
+ * @param {String} method The name of the method to extend
+ * @param {Function} func A wrapper function callback. This function is called with the same arguments
+ * as the original function, except that the original function is unshifted and passed as the first 
+ * argument. 
+ */
+function wrap(obj, method, func) {
+	var proceed = obj[method];
+	obj[method] = function () {
+		var args = Array.prototype.slice.call(arguments);
+		args.unshift(proceed);
+		return func.apply(this, args);
+	};
+}
+
+/**
  * Based on http://www.php.net/manual/en/function.strftime.php
  * @param {String} format
  * @param {Number} timestamp
@@ -326,7 +343,9 @@ dateFormat = function (format, timestamp, capitalize) {
 
 	// do the replaces
 	for (key in replacements) {
-		format = format.replace('%' + key, replacements[key]);
+		while (format.indexOf('%' + key) !== -1) { // regex would do it in one line, but this is faster
+			format = format.replace('%' + key, replacements[key]);
+		}
 	}
 
 	// Optionally capitalize the string and return
@@ -475,91 +494,91 @@ function getTimeTicks(normalizedInterval, min, max, startOfWeek) {
 		interval = normalizedInterval.unitRange,
 		count = normalizedInterval.count;
 
-	
-
-	if (interval >= timeUnits[SECOND]) { // second
-		minDate.setMilliseconds(0);
-		minDate.setSeconds(interval >= timeUnits[MINUTE] ? 0 :
-			count * mathFloor(minDate.getSeconds() / count));
-	}
-
-	if (interval >= timeUnits[MINUTE]) { // minute
-		minDate[setMinutes](interval >= timeUnits[HOUR] ? 0 :
-			count * mathFloor(minDate[getMinutes]() / count));
-	}
-
-	if (interval >= timeUnits[HOUR]) { // hour
-		minDate[setHours](interval >= timeUnits[DAY] ? 0 :
-			count * mathFloor(minDate[getHours]() / count));
-	}
-
-	if (interval >= timeUnits[DAY]) { // day
-		minDate[setDate](interval >= timeUnits[MONTH] ? 1 :
-			count * mathFloor(minDate[getDate]() / count));
-	}
-
-	if (interval >= timeUnits[MONTH]) { // month
-		minDate[setMonth](interval >= timeUnits[YEAR] ? 0 :
-			count * mathFloor(minDate[getMonth]() / count));
-		minYear = minDate[getFullYear]();
-	}
-
-	if (interval >= timeUnits[YEAR]) { // year
-		minYear -= minYear % count;
-		minDate[setFullYear](minYear);
-	}
-
-	// week is a special case that runs outside the hierarchy
-	if (interval === timeUnits[WEEK]) {
-		// get start of current week, independent of count
-		minDate[setDate](minDate[getDate]() - minDate[getDay]() +
-			pick(startOfWeek, 1));
-	}
-
-
-	// get tick positions
-	i = 1;
-	minYear = minDate[getFullYear]();
-	var time = minDate.getTime(),
-		minMonth = minDate[getMonth](),
-		minDateDate = minDate[getDate](),
-		timezoneOffset = useUTC ? 
-			0 : 
-			(24 * 3600 * 1000 + minDate.getTimezoneOffset() * 60 * 1000) % (24 * 3600 * 1000); // #950
-
-	// iterate and add tick positions at appropriate values
-	while (time < max) {
-		tickPositions.push(time);
-
-		// if the interval is years, use Date.UTC to increase years
-		if (interval === timeUnits[YEAR]) {
-			time = makeTime(minYear + i * count, 0);
-
-		// if the interval is months, use Date.UTC to increase months
-		} else if (interval === timeUnits[MONTH]) {
-			time = makeTime(minYear, minMonth + i * count);
-
-		// if we're using global time, the interval is not fixed as it jumps
-		// one hour at the DST crossover
-		} else if (!useUTC && (interval === timeUnits[DAY] || interval === timeUnits[WEEK])) {
-			time = makeTime(minYear, minMonth, minDateDate +
-				i * count * (interval === timeUnits[DAY] ? 1 : 7));
-
-		// else, the interval is fixed and we use simple addition
-		} else {
-			time += interval * count;
-			
-			// mark new days if the time is dividable by day
-			if (interval <= timeUnits[HOUR] && time % timeUnits[DAY] === timezoneOffset) {
-				higherRanks[time] = DAY;
-			}
+	if (defined(min)) { // #1300
+		if (interval >= timeUnits[SECOND]) { // second
+			minDate.setMilliseconds(0);
+			minDate.setSeconds(interval >= timeUnits[MINUTE] ? 0 :
+				count * mathFloor(minDate.getSeconds() / count));
 		}
-
-		i++;
-	}
 	
-	// push the last time
-	tickPositions.push(time);
+		if (interval >= timeUnits[MINUTE]) { // minute
+			minDate[setMinutes](interval >= timeUnits[HOUR] ? 0 :
+				count * mathFloor(minDate[getMinutes]() / count));
+		}
+	
+		if (interval >= timeUnits[HOUR]) { // hour
+			minDate[setHours](interval >= timeUnits[DAY] ? 0 :
+				count * mathFloor(minDate[getHours]() / count));
+		}
+	
+		if (interval >= timeUnits[DAY]) { // day
+			minDate[setDate](interval >= timeUnits[MONTH] ? 1 :
+				count * mathFloor(minDate[getDate]() / count));
+		}
+	
+		if (interval >= timeUnits[MONTH]) { // month
+			minDate[setMonth](interval >= timeUnits[YEAR] ? 0 :
+				count * mathFloor(minDate[getMonth]() / count));
+			minYear = minDate[getFullYear]();
+		}
+	
+		if (interval >= timeUnits[YEAR]) { // year
+			minYear -= minYear % count;
+			minDate[setFullYear](minYear);
+		}
+	
+		// week is a special case that runs outside the hierarchy
+		if (interval === timeUnits[WEEK]) {
+			// get start of current week, independent of count
+			minDate[setDate](minDate[getDate]() - minDate[getDay]() +
+				pick(startOfWeek, 1));
+		}
+	
+	
+		// get tick positions
+		i = 1;
+		minYear = minDate[getFullYear]();
+		var time = minDate.getTime(),
+			minMonth = minDate[getMonth](),
+			minDateDate = minDate[getDate](),
+			timezoneOffset = useUTC ? 
+				0 : 
+				(24 * 3600 * 1000 + minDate.getTimezoneOffset() * 60 * 1000) % (24 * 3600 * 1000); // #950
+	
+		// iterate and add tick positions at appropriate values
+		while (time < max) {
+			tickPositions.push(time);
+	
+			// if the interval is years, use Date.UTC to increase years
+			if (interval === timeUnits[YEAR]) {
+				time = makeTime(minYear + i * count, 0);
+	
+			// if the interval is months, use Date.UTC to increase months
+			} else if (interval === timeUnits[MONTH]) {
+				time = makeTime(minYear, minMonth + i * count);
+	
+			// if we're using global time, the interval is not fixed as it jumps
+			// one hour at the DST crossover
+			} else if (!useUTC && (interval === timeUnits[DAY] || interval === timeUnits[WEEK])) {
+				time = makeTime(minYear, minMonth, minDateDate +
+					i * count * (interval === timeUnits[DAY] ? 1 : 7));
+	
+			// else, the interval is fixed and we use simple addition
+			} else {
+				time += interval * count;
+				
+				// mark new days if the time is dividable by day
+				if (interval <= timeUnits[HOUR] && time % timeUnits[DAY] === timezoneOffset) {
+					higherRanks[time] = DAY;
+				}
+			}
+	
+			i++;
+		}
+	
+		// push the last time
+		tickPositions.push(time);
+	}
 
 	// record information on the chosen unit - for dynamic label formatter
 	tickPositions.info = extend(normalizedInterval, {
@@ -720,6 +739,16 @@ function correctFloat(num) {
 }
 
 /**
+ * Set the global animation to either a given value, or fall back to the
+ * given chart's animation option
+ * @param {Object} animation
+ * @param {Object} chart
+ */
+function setAnimation(animation, chart) {
+	globalAnimation = pick(animation, chart.animation);
+}
+
+/**
  * The time unit lookup
  */
 /*jslint white: true*/
@@ -730,7 +759,7 @@ timeUnits = hash(
 	HOUR, 3600000,
 	DAY, 24 * 3600000,
 	WEEK, 7 * 24 * 3600000,
-	MONTH, 30 * 24 * 3600000,
+	MONTH, 31 * 24 * 3600000,
 	YEAR, 31556952000
 );
 /*jslint white: false*/

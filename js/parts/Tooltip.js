@@ -6,15 +6,11 @@
 function Tooltip(chart, options) {
 	var borderWidth = options.borderWidth,
 		style = options.style,
-		shared = options.shared,
 		padding = pInt(style.padding);
 
 	// Save the chart and options
 	this.chart = chart;
 	this.options = options;
-
-	// remove padding CSS and apply padding on box instead
-	style.padding = 0;
 
 	// Keep track of the current series
 	//this.currentSeries = UNDEFINED;
@@ -23,17 +19,13 @@ function Tooltip(chart, options) {
 	this.crosshairs = [];
 
 	// Current values of x and y when animating
-	this.currentX = 0;
-	this.currentY = 0;
-
-	// The tooltipTick function, initialized to nothing
-	//this.tooltipTick = UNDEFINED;
+	this.now = { x: 0, y: 0 };
 
 	// The tooltip is initially hidden
-	this.tooltipIsHidden = true;
+	this.isHidden = true;
 
 	// create the label
-	this.label = chart.renderer.label('', 0, 0, null, null, null, options.useHTML, null, 'tooltip')
+	this.label = chart.renderer.label('', 0, 0, options.shape, null, null, options.useHTML, null, 'tooltip')
 		.attr({
 			padding: padding,
 			fill: options.backgroundColor,
@@ -42,6 +34,7 @@ function Tooltip(chart, options) {
 			zIndex: 8
 		})
 		.css(style)
+		.css({ padding: 0 }) // Remove it from VML, the padding is applied as an attribute instead (#1117)
 		.hide()
 		.add();
 
@@ -52,7 +45,7 @@ function Tooltip(chart, options) {
 	}
 
 	// Public property for getting the shared state.
-	this.shared = shared;
+	this.shared = options.shared;
 }
 
 Tooltip.prototype = {
@@ -75,27 +68,41 @@ Tooltip.prototype = {
 	/**
 	 * Provide a soft movement for the tooltip
 	 *
-	 * @param {Number} finalX
-	 * @param {Number} finalY
+	 * @param {Number} x
+	 * @param {Number} y
 	 * @private
 	 */
-	move: function (finalX, finalY) {
-		var tooltip = this;
+	move: function (x, y, anchorX, anchorY) {
+		var tooltip = this,
+			now = tooltip.now,
+			animate = tooltip.options.animation !== false && !tooltip.isHidden;
 
 		// get intermediate values for animation
-		tooltip.currentX = tooltip.tooltipIsHidden ? finalX : (2 * tooltip.currentX + finalX) / 3;
-		tooltip.currentY = tooltip.tooltipIsHidden ? finalY : (tooltip.currentY + finalY) / 2;
+		extend(now, {
+			x: animate ? (2 * now.x + x) / 3 : x,
+			y: animate ? (now.y + y) / 2 : y,
+			anchorX: animate ? (2 * now.anchorX + anchorX) / 3 : anchorX,
+			anchorY: animate ? (now.anchorY + anchorY) / 2 : anchorY
+		});
 
 		// move to the intermediate value
-		tooltip.label.attr({ x: tooltip.currentX, y: tooltip.currentY });
+		tooltip.label.attr(now);
 
+		
 		// run on next tick of the mouse tracker
-		if (mathAbs(finalX - tooltip.currentX) > 1 || mathAbs(finalY - tooltip.currentY) > 1) {
-			tooltip.tooltipTick = function () {
-				tooltip.move(finalX, finalY);
-			};
-		} else {
-			tooltip.tooltipTick = null;
+		if (animate && (mathAbs(x - now.x) > 1 || mathAbs(y - now.y) > 1)) {
+		
+			// never allow two timeouts
+			clearTimeout(this.tooltipTimeout);
+			
+			// set the fixed interval ticking for the smooth tooltip
+			this.tooltipTimeout = setTimeout(function () {
+				// The interval function may still be running during destroy, so check that the chart is really there before calling.
+				if (tooltip) {
+					tooltip.move(x, y, anchorX, anchorY);
+				}
+			}, 32);
+			
 		}
 	},
 
@@ -103,7 +110,7 @@ Tooltip.prototype = {
 	 * Hide the tooltip
 	 */
 	hide: function () {
-		if (!this.tooltipIsHidden) {
+		if (!this.isHidden) {
 			var hoverPoints = this.chart.hoverPoints;
 
 			this.label.hide();
@@ -116,7 +123,7 @@ Tooltip.prototype = {
 			}
 
 			this.chart.hoverPoints = null;
-			this.tooltipIsHidden = true;
+			this.isHidden = true;
 		}
 	},
 
@@ -140,7 +147,8 @@ Tooltip.prototype = {
 			chart = this.chart,
 			inverted = chart.inverted,
 			plotX = 0,
-			plotY = 0;
+			plotY = 0,
+			yAxis;
 		
 		points = splat(points);
 		
@@ -150,8 +158,10 @@ Tooltip.prototype = {
 		// When shared, use the average position
 		if (!ret) {
 			each(points, function (point) {
+				yAxis = point.series.yAxis;
 				plotX += point.plotX;
-				plotY += point.plotLow ? (point.plotLow + point.plotHigh) / 2 : point.plotY;
+				plotY += (point.plotLow ? (point.plotLow + point.plotHigh) / 2 : point.plotY) +
+					(!inverted && yAxis ? yAxis.top - chart.plotTop : 0); // #1151
 			});
 			
 			plotX /= points.length;
@@ -189,7 +199,7 @@ Tooltip.prototype = {
 	
 		// It is too far to the left, adjust it
 		if (x < 7) {
-			x = plotLeft + pointX + distance;
+			x = plotLeft + mathMax(pointX, 0) + distance;
 		}
 	
 		// Test to see if the tooltip is too far to the right,
@@ -215,7 +225,6 @@ Tooltip.prototype = {
 		if (y + boxHeight > plotTop + plotHeight) {
 			y = mathMax(plotTop, plotTop + plotHeight - boxHeight - distance); // below
 		}
-		
 	
 		return {x: x, y: y};
 	},
@@ -279,12 +288,13 @@ Tooltip.prototype = {
 		if (shared && !(point.series && point.series.noSharedTooltip)) {
 			
 			// hide previous hoverPoints and set new
+			
+			chart.hoverPoints = point;
 			if (hoverPoints) {
 				each(hoverPoints, function (point) {
 					point.setState();
 				});
 			}
-			chart.hoverPoints = point;
 
 			each(point, function (item) {
 				item.setState(HOVER_STATE);
@@ -318,7 +328,7 @@ Tooltip.prototype = {
 		} else {
 
 			// show it
-			if (tooltip.tooltipIsHidden) {
+			if (tooltip.isHidden) {
 				label.show();
 			}
 
@@ -341,10 +351,15 @@ Tooltip.prototype = {
 			);
 
 			// do the move
-			tooltip.move(mathRound(placedTooltipPoint.x), mathRound(placedTooltipPoint.y));
+			tooltip.move(
+				mathRound(placedTooltipPoint.x), 
+				mathRound(placedTooltipPoint.y), 
+				x + chart.plotLeft, 
+				y + chart.plotTop
+			);
 			
 			
-			tooltip.tooltipIsHidden = false;
+			tooltip.isHidden = false;
 		}
 
 		// crosshairs
@@ -389,14 +404,5 @@ Tooltip.prototype = {
 				y: y + chart.plotTop,
 				borderColor: borderColor
 			});
-	},
-
-	/**
-	 * Runs the tooltip animation one tick.
-	 */
-	tick: function () {
-		if (this.tooltipTick) {
-			this.tooltipTick();
-		}
 	}
 };

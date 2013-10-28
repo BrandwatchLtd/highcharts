@@ -1,28 +1,27 @@
 /* 
  * The AreaRangeSeries class
  * 
- * http://jsfiddle.net/highcharts/DFANM/
- * 
- * TODO:
- * - Check out inverted
- * - Disable stateMarker (or concatenize paths for the markers?)
- * - Test series.data point config formats
  */
 
 /**
  * Extend the default options with map options
  */
 defaultPlotOptions.arearange = merge(defaultPlotOptions.area, {
-	lineWidth: 0,
+	lineWidth: 1,
+	marker: null,
 	threshold: null,
 	tooltip: {
-		pointFormat: '<span style="color:{series.color}">{series.name}</span>: {point.low} - {point.high}' 
+		pointFormat: '<span style="color:{series.color}">{series.name}</span>: <b>{point.low}</b> - <b>{point.high}</b><br/>' 
 	},
 	trackByArea: true,
 	dataLabels: {
-		yHigh: -6,
-		yLow: 16
-	}
+		verticalAlign: null,
+		xLow: 0,
+		xHigh: 0,
+		yLow: 0,
+		yHigh: 0	
+	},
+	shadow: false
 });
 
 /**
@@ -36,10 +35,13 @@ var RangePoint = Highcharts.extendClass(Highcharts.Point, {
 	 *
 	 * @param {Object} options
 	 */
-	applyOptions: function (options) {
+	applyOptions: function (options, x) {
 		var point = this,
 			series = point.series,
-			i = 0;
+			pointArrayMap = series.pointArrayMap,
+			i = 0,
+			j = 0,
+			valueCount = pointArrayMap.length;
 
 
 		// object input
@@ -52,7 +54,7 @@ var RangePoint = Highcharts.extendClass(Highcharts.Point, {
 			
 		} else if (options.length) { // array
 			// with leading x value
-			if (options.length === 3) {
+			if (options.length > valueCount) {
 				if (typeof options[0] === 'string') {
 					point.name = options[0];
 				} else if (typeof options[0] === 'number') {
@@ -60,21 +62,23 @@ var RangePoint = Highcharts.extendClass(Highcharts.Point, {
 				}
 				i++;
 			}
-			point.low = options[i++];
-			point.high = options[i++];
+			while (j < valueCount) {
+				point[pointArrayMap[j++]] = options[i++];
+			}
 		}
 
 		// Handle null and make low alias y
-		if (point.high === null) {
+		/*if (point.high === null) {
 			point.low = null;
-		}
-		point.y = point.low;
+		}*/
+		point.y = point[series.pointValKey];
 		
 		// If no x is set by now, get auto incremented value. All points must have an
 		// x value, however the y value can be null to create a gap in the series
 		if (point.x === UNDEFINED && series) {
-			point.x = series.autoIncrement();
+			point.x = x === UNDEFINED ? series.autoIncrement() : x;
 		}
+		
 		return point;
 	},
 	
@@ -91,8 +95,9 @@ var RangePoint = Highcharts.extendClass(Highcharts.Point, {
  */
 seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 	type: 'arearange',
-	valueCount: 2, // two values per point
-	pointClass: RangePoint, 
+	pointArrayMap: ['low', 'high'],
+	pointClass: RangePoint,
+	pointValKey: 'low',
 	
 	/**
 	 * Translate data points from raw values x and y to plotX and plotY
@@ -125,6 +130,8 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 			point,
 			linePath,
 			lowerPath,
+			options = this.options,
+			step = options.step,
 			higherPath;
 			
 		// Make a segment with plotX and plotY for the top values
@@ -138,7 +145,14 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 		
 		// Get the paths
 		lowerPath = baseGetSegmentPath.call(this, segment);
+		if (step) {
+			if (step === true) {
+				step = 'left';
+			}
+			options.step = { left: 'right', center: 'center', right: 'left' }[step]; // swap for reading in getSegmentPath
+		}
 		higherPath = baseGetSegmentPath.call(this, highSegment);
+		options.step = step;
 		
 		// Create a line on both top and bottom of the range
 		linePath = [].concat(lowerPath, higherPath);
@@ -156,52 +170,72 @@ seriesTypes.arearange = Highcharts.extendClass(seriesTypes.area, {
 	 */
 	drawDataLabels: function () {
 		
-		var points = this.points,
-			length = points.length,
+		var data = this.data,
+			length = data.length,
 			i,
 			originalDataLabels = [],
-			uberMethod = Series.prototype.drawDataLabels,
+			seriesProto = Series.prototype,
 			dataLabelOptions = this.options.dataLabels,
-			point;
+			point,
+			inverted = this.chart.inverted;
 			
-		// Step 1: set preliminary values for plotY and dataLabel and draw the upper labels
-		i = length;
-		while (i--) {
-			point = points[i];
+		if (dataLabelOptions.enabled || this._hasPointLabels) {
 			
-			// Set preliminary values
-			point.y = point.high;
-			point.plotY = point.plotHigh;
+			// Step 1: set preliminary values for plotY and dataLabel and draw the upper labels
+			i = length;
+			while (i--) {
+				point = data[i];
+				
+				// Set preliminary values
+				point.y = point.high;
+				point.plotY = point.plotHigh;
+				
+				// Store original data labels and set preliminary label objects to be picked up 
+				// in the uber method
+				originalDataLabels[i] = point.dataLabel;
+				point.dataLabel = point.dataLabelUpper;
+				
+				// Set the default offset
+				point.below = false;
+				if (inverted) {
+					dataLabelOptions.align = 'left';
+					dataLabelOptions.x = dataLabelOptions.xHigh;								
+				} else {
+					dataLabelOptions.y = dataLabelOptions.yHigh;
+				}
+			}
+			seriesProto.drawDataLabels.apply(this, arguments); // #1209
 			
-			// Store original data labels and set preliminary label objects to be picked up 
-			// in the uber method
-			originalDataLabels[i] = point.dataLabel;
-			point.dataLabel = point.dataLabelUpper;
-			
-			// Set the default y offset
-			dataLabelOptions.y = dataLabelOptions.yHigh;
+			// Step 2: reorganize and handle data labels for the lower values
+			i = length;
+			while (i--) {
+				point = data[i];
+				
+				// Move the generated labels from step 1, and reassign the original data labels
+				point.dataLabelUpper = point.dataLabel;
+				point.dataLabel = originalDataLabels[i];
+				
+				// Reset values
+				point.y = point.low;
+				point.plotY = point.plotLow;
+				
+				// Set the default offset
+				point.below = true;
+				if (inverted) {
+					dataLabelOptions.align = 'right';
+					dataLabelOptions.x = dataLabelOptions.xLow;
+				} else {
+					dataLabelOptions.y = dataLabelOptions.yLow;
+				}
+			}
+			seriesProto.drawDataLabels.apply(this, arguments);
 		}
-		uberMethod.apply(this, arguments);
-		
-		// Step 2: reorganize and handle data labels for the lower values
-		i = length;
-		while (i--) {
-			point = points[i];
-			
-			// Move the generated labels from step 1, and reassign the original data labels
-			point.dataLabelUpper = point.dataLabel;
-			point.dataLabel = originalDataLabels[i];
-			
-			// Reset values
-			point.y = point.low;
-			point.plotY = point.plotLow;
-			
-			// Set the default y offset
-			dataLabelOptions.y = dataLabelOptions.yLow;
-		}
-		uberMethod.apply(this, arguments);
 	
 	},
+	
+	alignDataLabel: seriesTypes.column.prototype.alignDataLabel,
+	
+	getSymbol: seriesTypes.column.prototype.getSymbol,
 	
 	drawPoints: noop
 });
