@@ -58,7 +58,7 @@
 					
 					each(axis.series, function (series, i) {
 						
-						if (series.visible !== false) {
+						if (series.visible !== false && series.takeOrdinalPosition !== false) {
 							
 							// concatenate the processed X data into the existing positions, or the empty array 
 							ordinalPositions = ordinalPositions.concat(series.processedXData);
@@ -573,7 +573,7 @@
 						
 						// Apply it if it is within the available data range
 						if (newMin > mathMin(extremes.dataMin, min) && newMax < mathMax(dataMax, max)) {
-							xAxis.setExtremes(newMin, newMax, true, false);
+							xAxis.setExtremes(newMin, newMax, true, false, { trigger: 'pan' });
 						}
 				
 						chart.mouseDownX = chartX; // set new reference for next run

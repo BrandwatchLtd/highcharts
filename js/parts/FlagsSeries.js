@@ -33,6 +33,7 @@ seriesTypes.flags = extendClass(seriesTypes.column, {
 	type: 'flags',
 	sorted: false,
 	noSharedTooltip: true,
+	takeOrdinalPosition: false, // #1074
 	forceCrop: true,
 	/**
 	 * Inherit the initialization from base Series
@@ -68,7 +69,8 @@ seriesTypes.flags = extendClass(seriesTypes.column, {
 			step = onSeries && onSeries.options.step,
 			onData = onSeries && onSeries.points,
 			i = onData && onData.length,
-			xAxisExt = series.xAxis.getExtremes(),
+			xAxis = series.xAxis,
+			xAxisExt = xAxis.getExtremes(),
 			leftPoint,
 			lastX,
 			rightPoint;
@@ -120,7 +122,7 @@ seriesTypes.flags = extendClass(seriesTypes.column, {
 			// an undefined plotY, but then we must remove the shapeArgs (#847).
 			if (point.plotY === UNDEFINED) {
 				if (point.x >= xAxisExt.min && point.x <= xAxisExt.max) { // we're inside xAxis range
-					point.plotY = chart.plotHeight;
+					point.plotY = xAxis.lineTop - chart.plotTop;
 				} else {
 					point.shapeArgs = {}; // 847
 				}
@@ -240,16 +242,17 @@ seriesTypes.flags = extendClass(seriesTypes.column, {
 	 * Extend the column trackers with listeners to expand and contract stacks
 	 */
 	drawTracker: function () {
-		var series = this;
-
-		seriesTypes.column.prototype.drawTracker.apply(series);
+		
+		seriesTypes.column.prototype.drawTracker.apply(this);
 
 		// put each point in front on mouse over, this allows readability of vertically
 		// stacked elements as well as tight points on the x axis
-		each(series.points, function (point) {
-			addEvent(point.tracker.element, 'mouseover', function () {
-				point.graphic.toFront();
-			});
+		each(this.points, function (point) {
+			if (point.tracker) { // #1046
+				addEvent(point.tracker.element, 'mouseover', function () {
+					point.graphic.toFront();
+				});
+			}
 		});
 	},
 

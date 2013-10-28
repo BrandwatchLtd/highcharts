@@ -7,6 +7,15 @@ if (!preg_match('/^[a-z]+\/[a-z]+\/[a-z0-9\-,]+$/', $path)) {
 $i = (int)$_GET['i'];
 $next = $i + 1;
 
+// Get HTML and use dev server
+ob_start();
+include("$path/demo.html");
+$html = ob_get_clean();
+$html = str_replace('/code.highcharts.com/high', '/codev.highcharts.com/high', $html);
+$html = str_replace('/code.highcharts.com/stock/', '/codev.highcharts.com/', $html);
+$html = str_replace('/code.highcharts.com/modules/', '/codev.highcharts.com/modules/', $html);
+	
+
 
 function getResources() {
 	global $path;
@@ -44,6 +53,8 @@ function getResources() {
 	}
 	return $html;
 }
+
+
 ?><!DOCTYPE HTML>
 <html>
 	<head>
@@ -63,6 +74,8 @@ function getResources() {
 		<script type="text/javascript">
 			$(function() {
 				
+				$('#version').html(Highcharts.product + ' ' + Highcharts.version);
+				
 				if (window.parent.frames[0]) {
 					var contentDoc = window.parent.frames[0].document;
 					
@@ -75,12 +88,12 @@ function getResources() {
 							$(contentDoc.currentLi).addClass('visited');
 						}
 						
-						$(li).addClass('hilighted');
 						$(contentDoc.body).animate({
 							scrollTop: $(li).offset().top - 70
 						},'slow');
 
 						contentDoc.currentLi = li;
+						$(li).addClass('hilighted');
 					}
 					
 					// add the next button
@@ -119,6 +132,8 @@ function getResources() {
 		
 		<div class="top-bar">
 			
+			<div id="version" style="float:right; color: white"></div>
+			
 			<h2 style="margin: 0"><?php echo ($next - 1) ?>. <?php echo $path ?></h2> 
 			
 			<div style="text-align: center">
@@ -127,13 +142,13 @@ function getResources() {
 				<a style="color: white; font-weight: bold; text-decoration: none; margin-left: 1em" 
 					href="../compare-svg/view.php?path=<?php echo $path ?>&amp;i=<?php echo $i ?>">Compare</a>
 				<a style="color: white; font-weight: bold; text-decoration: none; margin-left: 1em" 
-					href="http://jsfiddle.net/gh/get/jquery/1.7.1/highslide-software/highcharts.com/tree/master/samples/<?php echo $path ?>/"
+					href="http://jsfiddle.net/gh/get/jquery/1.8.2/highslide-software/highcharts.com/tree/master/samples/<?php echo $path ?>/"
 					target="_blank">» jsFiddle</a>
 			</div>
 		</div>
 		<div style="margin: 1em">
 		
-		<?php @include("$path/demo.html"); ?>
+		<?php echo $html ?>
 		</div>
 		
 	</body>

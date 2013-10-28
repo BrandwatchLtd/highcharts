@@ -10,7 +10,6 @@ Highcharts.StockChart = function (options, callback) {
 				enabled: false,
 				states: {
 					hover: {
-						enabled: true,
 						radius: 5
 					}
 				}
@@ -21,10 +20,11 @@ Highcharts.StockChart = function (options, callback) {
 				hover: {
 					lineWidth: 2
 				}
-			},
-			dataGrouping: {
-				enabled: true
 			}
+		},
+		columnOptions = {
+			shadow: false,
+			borderWidth: 0
 		};
 
 	// apply X axis options to both single and multi y axes
@@ -95,19 +95,19 @@ Highcharts.StockChart = function (options, callback) {
 			spline: lineOptions,
 			area: lineOptions,
 			areaspline: lineOptions,
-			column: {
-				shadow: false,
-				borderWidth: 0,
-				dataGrouping: {
-					enabled: true
-				}
-			}
+			arearange: lineOptions,
+			areasplinerange: lineOptions,
+			column: columnOptions,
+			columnrange: columnOptions,
+			candlestick: columnOptions,
+			ohlc: columnOptions
 		}
 
 	},
 	options, // user's options
 
 	{ // forced options
+		_stock: true, // internal flag
 		chart: {
 			inverted: false
 		}

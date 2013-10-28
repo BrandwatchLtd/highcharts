@@ -3,14 +3,19 @@
  */
 
 var files = [
-    "Globals.js",
+	"Globals.js",
+    "Pane.js",
+    "RadialAxis.js",
     "AreaRangeSeries.js",
-	"GaugeSeries.js"
+    "AreaSplineRangeSeries.js",
+    "ColumnRangeSeries.js",
+	"GaugeSeries.js",
+	"Polar.js"
 ];
 
 // Parse the path from the script tag
-var $tag = $('script[src$="highcharts.debug.js"]'),
-	path = $tag.attr('src').replace('highcharts.debug.js', '') + 'parts/';
+var $tag = $('script[src$="highcharts-more.debug.js"]'),
+	path = $tag.attr('src').replace('highcharts-more.debug.js', '') + 'parts/';
 
 // Include the individual files
 $.each(files, function (i, file) {

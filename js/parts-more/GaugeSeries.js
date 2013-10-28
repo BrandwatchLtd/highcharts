@@ -1,16 +1,5 @@
 /* 
  * The GaugeSeries class
- * 
- * Speedometer: http://jsfiddle.net/highcharts/qPeFM/
- * Clock:       http://jsfiddle.net/highcharts/BFN2F/
- * 
- * TODO:
- * - Radial gradients.
- *	 - Fix issue with linearGradient being present from merging background options
- *	 - Experiment more with pattern in VML
- * - Size to the actual space given, for example by vu-meters
- * - Dials are not perfectly centered in IE. Consider altering translation in updateTransform.
- * - Missing axis line in IE, dual axes example
  */
 
 
@@ -21,13 +10,15 @@
 defaultPlotOptions.gauge = merge(defaultPlotOptions.line, {
 	dataLabels: {
 		enabled: true,
-		y: 30,
+		y: 15,
 		borderWidth: 1,
 		borderColor: 'silver',
 		borderRadius: 3,
 		style: {
 			fontWeight: 'bold'
-		}
+		},
+		verticalAlign: 'top',
+		zIndex: 2
 	},
 	dial: {
 		// radius: '80%',
@@ -116,11 +107,12 @@ var GaugeSeries = {
 					radius, -topWidth / 2,
 					radius, topWidth / 2,
 					baseLength, baseWidth / 2,
-					-rearLength, baseWidth / 2
+					-rearLength, baseWidth / 2,
+					'z'
 				],
 				translateX: center[0],
 				translateY: center[1],
-				rotation: (yAxis.startAngleRad + yAxis.translate(point.y)) * 180 / Math.PI
+				rotation: (yAxis.startAngleRad + yAxis.translate(point.y, null, null, null, true)) * 180 / Math.PI
 			};
 			
 			// Positions for data label
@@ -139,23 +131,25 @@ var GaugeSeries = {
 			pivot = series.pivot,
 			options = series.options,
 			pivotOptions = options.pivot,
-			dialOptions = options.dial;
+			renderer = series.chart.renderer;
 		
 		each(series.points, function (point) {
 			
 			var graphic = point.graphic,
 				shapeArgs = point.shapeArgs,
-				d = shapeArgs.d;
+				d = shapeArgs.d,
+				dialOptions = merge(options.dial, point.dial); // #1233
 			
 			if (graphic) {
 				graphic.animate(shapeArgs);
 				shapeArgs.d = d; // animate alters it
 			} else {
-				point.graphic = series.chart.renderer[point.shapeType](shapeArgs)
+				point.graphic = renderer[point.shapeType](shapeArgs)
 					.attr({
 						stroke: dialOptions.borderColor || 'none',
 						'stroke-width': dialOptions.borderWidth || 0,
-						fill: dialOptions.backgroundColor || 'black'
+						fill: dialOptions.backgroundColor || 'black',
+						rotation: shapeArgs.rotation // required by VML when animation is false
 					})
 					.add(series.group);
 			}
@@ -163,17 +157,18 @@ var GaugeSeries = {
 		
 		// Add or move the pivot
 		if (pivot) {
-			pivot.animate({
-				cx: center[0],
-				cy: center[1]
+			pivot.animate({ // #1235
+				translateX: center[0],
+				translateY: center[1]
 			});
 		} else {
-			series.pivot = series.chart.renderer.circle(center[0], center[1], pick(pivotOptions.radius, 5))
+			series.pivot = renderer.circle(0, 0, pick(pivotOptions.radius, 5))
 				.attr({
 					'stroke-width': pivotOptions.borderWidth || 0,
 					stroke: pivotOptions.borderColor || 'silver',
 					fill: pivotOptions.backgroundColor || 'black'
 				})
+				.translate(center[0], center[1])
 				.add(series.group);
 		}
 	},
@@ -205,8 +200,15 @@ var GaugeSeries = {
 	},
 	
 	render: function () {
-		this.createGroup();
+		this.group = this.plotGroup(
+			'group', 
+			'series', 
+			this.visible ? 'visible' : 'hidden', 
+			this.options.zIndex, 
+			this.chart.seriesGroup
+		);
 		seriesTypes.pie.prototype.render.call(this);
+		this.group.clip(this.chart.clipRect);
 	},
 	
 	setData: seriesTypes.pie.prototype.setData,
