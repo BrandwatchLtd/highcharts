@@ -1,6 +1,6 @@
 {
   "name": "highcharts",
-  "version": "2.3.5-bower",
+  "version": "2.3.5-2",
   "main": "js/highcharts.src.js",
   "ignore": [
     "**/.*",
